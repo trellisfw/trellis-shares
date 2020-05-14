@@ -26,7 +26,17 @@ if (DOMAIN === 'localhost') {
 }
 
 
-const service = new Service('trellis-shares', DOMAIN, TOKEN, 1); // 1 concurrent job
+const service = new Service('trellis-shares', DOMAIN, TOKEN, 1, {
+  finishReporters: [ 
+    { 
+      type: 'slack', 
+      status: 'failure', 
+      posturl: config.get('slackposturl'),
+    } 
+  ]
+}); // 1 concurrent job
+
+
 
 // 5 min timeout
 service.on('share-user-link', config.get('timeout'), newJob);
