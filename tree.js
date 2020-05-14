@@ -2,7 +2,7 @@ export default {
   bookmarks: {
     _type: 'application/vnd.oada.bookmarks.1+json',
     trellisfw: {
-      _type: 'application/vnd.trellisfw.1+json',
+      _type: 'application/vnd.trellis.1+json',
     },
     services: {
       _type: 'application/vnd.oada.services.1+json',

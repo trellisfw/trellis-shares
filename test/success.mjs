@@ -30,11 +30,11 @@ const tree = {
       }
     },
     trellisfw: {
-      _type: 'application/vnd.trellisfw.1+json',
+      _type: 'application/vnd.trellis.1+json',
       cois: {
-        _type: 'application/vnd.trellisfw.cois.1+json',
+        _type: 'application/vnd.trellis.cois.1+json',
         '*': {
-          _type: 'application/vnd.trellisfw.coi.1+json',
+          _type: 'application/vnd.trellis.coi.1+json',
         },
       }
     },
@@ -67,7 +67,7 @@ describe('success job', () => {
 
     // Create the dummy coi and link
     console.log('Before: creating dummy COI');
-    await con.put({ path: `/resources/${coikey}`, headers: { 'content-type': 'application/vnd.trellisfw.coi.1+json' }, data: {
+    await con.put({ path: `/resources/${coikey}`, headers: { 'content-type': 'application/vnd.trellis.coi.1+json' }, data: {
       holder: {
         name: 'test name',
       },

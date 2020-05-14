@@ -90,13 +90,14 @@ async function putLinkAndEnsureParent({path, data, chroot, tree, oada}) {
   const parts = jsonpointer.parse(path);
   const linkkey = parts[parts.length-1];
   path = jsonpointer.compile(_.slice(parts, 0, parts.length-1));
-  trace('Bottom-level linkkey = ', linkkey);
+  trace('#putLinkAndEnsureParent: Bottom-level linkkey = ', linkkey);
   data = { [linkkey]:  data }
 
   // ensure the parent:
-  const exists = oada.get({path}).then(r=>r.status).catch(e=>e.status);
+  const exists = await oada.get({path}).then(r=>r.status).catch(e=>e.status);
+  trace(`#putLinkAndEnsureParent: After getting path ${path}, exists (status) = ${exists}`);
   if (exists === 404) { // parent does not exist, need to create a resource and link in it's parent
-    trace(`Destination parent ${path} did not exist, creating...`);
+    trace(`#putLinkAndEnsureParent: Destination parent ${path} did not exist, creating...`);
     const treeobj = jsonpointer.get(tree, path.replace(chroot,''));
     if (!treeobj) throw new Error(`The specified path does not exist in tree after removing chroot.  Path = ${path.replace(chroot,'')}`);
     const _type = treeobj._type;
@@ -106,12 +107,14 @@ async function putLinkAndEnsureParent({path, data, chroot, tree, oada}) {
     // Create a resource, put link into it's parent
     const newid = await oada.post({path: '/resources', headers: { 'content-type': _type }, data: {} })
       .then(r=>r.headers['content-location'].replace(/^\//,''));
+    trace(`#putLinkAndEnsureParent: posted new resource to /resources for the child, newid = ${newid}`);
     const newlink = { _id: newid };
     if (_rev) newlink._rev = 0; // if tree asked for versioned
-    
+
+    trace(`#putLinkAndEnsureParent: recursively running now for path ${path} and data`, data);
     await putLinkAndEnsureParent({path, data: newlink, chroot, tree})
   }
-  console.log('Destination parent ${path} now is known to exist, putting to path = ', path, ', data = ', data);
+  trace(`Destination parent ${path} now is known to exist, putting to path = ${path}, data = `, data);
   
   // If we get here, parent exists and we can put, no need for content-type
   return await oada.put({path,data}).then(r=>r.headers['content-location']);
