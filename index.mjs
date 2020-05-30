@@ -112,7 +112,7 @@ async function putLinkAndEnsureParent({path, data, chroot, tree, oada}) {
     if (_rev) newlink._rev = 0; // if tree asked for versioned
 
     trace(`#putLinkAndEnsureParent: recursively running now for path ${path} and data`, data);
-    await putLinkAndEnsureParent({path, data: newlink, chroot, tree})
+    await putLinkAndEnsureParent({path, data: newlink, chroot, tree, oada})
   }
   trace(`Destination parent ${path} now is known to exist, putting to path = ${path}, data = `, data);
   
@@ -135,7 +135,7 @@ async function createEmailJobs({oada,job}) {
     token: usertoken,
     scope: [ 'all:all' ],
     createTime: Date.now(),
-    expiresIn: 90*24*3600, // 90 days
+    expiresIn: 90*24*3600*1000, // 90 days, in milliseconds
   };
 
   trace(`createEmailJobs: posting to /authorizations for user `, job.config.user.id, ', body = ', d);
@@ -183,7 +183,7 @@ async function createEmailJobs({oada,job}) {
         link: `https://trellisfw.github.io/conductor?d=${DOMAIN}&t=${usertoken}`,
       },
       html: template.html,
-      attachments: template.attachements,
+      attachments: template.attachments,
     },
   }}).then(r=>r.headers['content-location'].replace(/^\/resources\//,''));
 

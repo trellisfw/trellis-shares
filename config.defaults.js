@@ -16,6 +16,6 @@
 export default {
   domain: 'localhost',
   token: 'god',
-  timeout: 30000, // 30 seconds
+  timeout: 5*60*1000, // 30 seconds
   slackposturl: 'https://example.com', // use a real slack webhook URL
 }
