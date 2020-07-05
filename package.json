@@ -1,23 +1,24 @@
 {
   "name": "trellis-shares",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "A Trellis microservice to handle sharing documents based on jobs",
   "main": "index.mjs",
   "type": "module",
   "scripts": {
     "start": "node index.mjs",
-    "test": "mocha"
+    "test": "DEBUG=\"trellis-shares*,${DEBUG}\" mocha"
   },
   "repository": "https://github.com/trellisfw/trellis-shares",
   "author": "Andrew Balmos <andrew@qlever.io>",
   "license": "None",
   "private": true,
   "dependencies": {
-    "@oada/client": "^1.0.2",
+    "@oada/client": "^1.0.4",
     "@oada/jobs": "^1.0.4",
     "@trellisfw/signatures": "^2.1.3",
     "bluebird": "^3.7.2",
     "debug": "^4.1.1",
+    "flat": "^5.0.0",
     "json-pointer": "^0.6.0",
     "lodash": "^4.17.15",
     "nconf": "^0.10.0",

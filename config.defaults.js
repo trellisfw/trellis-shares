@@ -14,8 +14,8 @@
  */
 
 export default {
-  domain: 'localhost',
-  token: 'god',
+  domain: 'proxy',
+  token: 'god-proxy',
   timeout: 5*60*1000, // 30 seconds
   slackposturl: 'https://example.com', // use a real slack webhook URL
 }
