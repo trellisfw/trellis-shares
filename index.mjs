@@ -47,7 +47,7 @@ async function newJob(job, { jobId, log, oada }) {
   await oada.put({ path: `${job.config.src}/_meta/services/trellis-shares/jobs`, data: {
     [jobId]: { _ref: `resources/${jobId}` },
   }});
- 
+
   // Find the net dest path, taking into consideration chroot
   const dest = job.config.dest;
   let destpath = dest;
@@ -75,6 +75,19 @@ async function newJob(job, { jobId, log, oada }) {
   const putresid = await putLinkAndEnsureParent({ path: destpath, data: srclink, chroot, tree, oada});
   info(`Successfully linked src = ${job.config.src} to dest = ${dest} with chroot ${chroot}`);
 
+
+  trace('Incrementing share count under src/_meta');
+  let shareCount = await oada.get({ path: `${job.config.src}/_meta/services/trellis-shares/share-count` }).then(r=>r.data)
+  .catch(e => {
+    if (!e || e.status !== 404) {
+      throw new Error('Failed to fetch share count, non-404 error status returned ('+(e?e.status:null)+')');
+    }
+    return 0; // no share-count there, so it's just initialized to 0
+  });
+  trace(`Retrieved share-count = ${shareCount}, PUTting new incremented count`);
+  await oada.put({ path: `${job.config.src}/_meta/services/trellis-shares`, data: {
+    "share-count": shareCount+1,
+  }});
 
   // HARDCODED UNTIL AINZ CAN DO THIS INSTEAD
   await createEmailJobs({oada,job});
