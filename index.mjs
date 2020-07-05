@@ -109,7 +109,7 @@ async function newJob(job, { jobId, log, oada }) {
     const newid = await oada.post({ path: '/resources', data: src }).then(r=>r.headers['content-location'].replace(/^\//,''));
     trace('Created copy resource, newid = ', newid);
     // Put the copy's meta:
-    await oada.put({ path: `/${newid}/_meta`, data: meta );
+    await oada.put({ path: `/${newid}/_meta`, data: meta });
 
     // Reset the srclink to point to the copy now
     srclink._id = newid;
