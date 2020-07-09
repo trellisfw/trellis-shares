@@ -17,9 +17,9 @@
 import libConfig from './lib-config.cjs'
 import config from './config.defaults.js'
 
-const exp = libConfig(config);
+const exp = libConfig(config)
 
 if (!exp.get('domain').match(/^http/)) {
-  exp.set('domain', 'https://'+exp.get('domain'));
+  exp.set('domain', 'https://' + exp.get('domain'))
 }
-export default exp;
+export default exp

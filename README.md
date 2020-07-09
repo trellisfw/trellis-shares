@@ -1,8 +1,10 @@
 # trellis-shares
-A microservice to process sharing jobs.  A sharing job shares a document from a
-`src` to a `destination`.  
+
+A microservice to process sharing jobs. A sharing job shares a document from a
+`src` to a `destination`.
 
 In its current form, it accepts jobs that look like this:
+
 ```http
 POST /bookmarks/services/trellis-shares/jobs
 {
@@ -20,11 +22,13 @@ POST /bookmarks/services/trellis-shares/jobs
   }
 }
 ```
+
 Note that technically "bookmarks" is repeated twice, but the library removes one of
-them when smashing the strings together.  Tree shold be rooted at the dest rather than
+them when smashing the strings together. Tree shold be rooted at the dest rather than
 trying to include the chroot and the dest.
 
 ## Installation
+
 ```docker-compose
 cd path/to/your/oada-srvc-docker
 cd services-available
@@ -35,8 +39,10 @@ oada up -d trellis-shares
 ```
 
 ## Overriding defaults for Production
+
 Using the common `z_tokens` method outlined for `oada-srvc-docker`, the following entries
 for the `z_tokens` docker-compose file will work:
+
 ```docker-compose
   trellis-shares:
     volumes:
@@ -45,5 +51,3 @@ for the `z_tokens` docker-compose file will work:
       - token=atokentouseinproduction
       - domain=your.trellis.domain
 ```
-
-
