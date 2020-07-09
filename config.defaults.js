@@ -18,4 +18,5 @@ export default {
   token: 'god-proxy',
   timeout: 5*60*1000, // 30 seconds
   slackposturl: 'https://example.com', // use a real slack webhook URL
+  skin: 'default', // used for abalonemail job creation
 }

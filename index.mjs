@@ -25,6 +25,7 @@ if (DOMAIN.match(/^http/)) DOMAIN = DOMAIN.replace(/^https:\/\//, '');
 if (DOMAIN === 'localhost' || DOMAIN === 'proxy') {
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = 0;
 }
+const SKIN = config.get('skin') || 'default';
 
 
 const service = new Service('trellis-shares', DOMAIN, TOKEN, 1, {
@@ -248,7 +249,7 @@ async function createEmailJobs({oada,job}) {
       subject: `Trellis notification: ${subject}`,
       templateData: {
         recipients: emails,
-        link: `https://trellisfw.github.io/conductor?d=${DOMAIN}&t=${usertoken}`,
+        link: `https://trellisfw.github.io/conductor?d=${DOMAIN}&t=${usertoken}&s=${SKIN}`,
       },
       html: template.html,
       attachments: template.attachments,
