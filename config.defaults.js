@@ -18,5 +18,11 @@ export default {
   token: 'god-proxy',
   timeout: 5 * 60 * 1000, // 30 seconds
   slackposturl: 'https://example.com', // use a real slack webhook URL
-  skin: 'default' // used for abalonemail job creation
+
+  // Abalonemail templates:
+  skin: 'default', // used for abalonemail job creation
+
+  // Masking:
+  privateJWK: './keys/private_key.jwk', // used for masking and signing
+  signer: { name: "Dev signer", url: 'https://oatscenter.org' },
 }

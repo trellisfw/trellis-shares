@@ -51,3 +51,14 @@ for the `z_tokens` docker-compose file will work:
       - token=atokentouseinproduction
       - domain=your.trellis.domain
 ```
+
+## Masking and PDF Generation
+
+Plan is for this to work as follows:
+- This only works for copying, it does not work for re-linking an existing document
+- job config includes mask and pdf creation instructions (i.e. whether to mask, and which keys to mask)
+- when the copy is created, the copy will ref back to the original in its meta/vdoc/unmasked
+- the masked copy will be linked from the original through the job's final result object rather than semantically under meta somewhere
+- if pdf creation is enabled for the mask, and it is a supported type, the PDF will be made
+- PDF will be linked under meta/vdoc/pdf just as the unmasked copy, and the JSON will be linked under the pdf's meta/vdoc/(audits|cois|etc)/{key} (i.e. doubly-linked)
+- I think this will just work as-is for Reagan because the PDF contains links already for verification, no need to alter the emails.
