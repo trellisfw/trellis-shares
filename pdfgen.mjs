@@ -39,7 +39,7 @@ async function makeAndPostMaskedPdf({masked, _id, doctype, filename, domain, tok
       domain = 'https://'+domain;
     }
   
-    if (!pdf_filename) pdf_filename = "TrellisMaskAndLink-"+(await ksuid.random())+'.pdf';
+    if (!filename) filename = "TrellisMaskAndLink-"+(await ksuid.random())+'.pdf';
 
     const doc = new pdfjs.Document({
       font: helvetica,
@@ -104,9 +104,8 @@ async function makeAndPostMaskedPdf({masked, _id, doctype, filename, domain, tok
     trace('Finished adding tables, now adding json');
     // And, in the final pages, add the actual JSON with the signatures
     doc.cell().pageBreak();
-    data = pullData(masked); 
     // Make a copy that doesn't have the _ oada keys like _id, _rev, etc.
-    const clean = _.omitBy(_.cloneDeep(masked), (v,k) => !k.match(/^_/));
+    const clean = _.omitBy(_.cloneDeep(masked), (v,k) => k.match(/^_/));
   
     doc.cell({ paddingBottom: 0.5*pdfjs.cm})
       .text(data.title+' - Full Signature and Data')
@@ -129,7 +128,7 @@ async function makeAndPostMaskedPdf({masked, _id, doctype, filename, domain, tok
     // content-type: application/pdf
     const pdfid = await axios({
       method: 'post',
-      url: `https://${domain}/resources`,
+      url: `${domain}/resources`,
       data: docbuf,
       headers: { 'content-type': 'application/pdf', authorization: 'Bearer '+token },
     }).then(r=>r.headers['content-location'].slice(1))
@@ -137,11 +136,11 @@ async function makeAndPostMaskedPdf({masked, _id, doctype, filename, domain, tok
     info('Successfully posted new PDF to '+pdfid);
 
     // Put the filename in the pdf's meta
-    if (pdf_filename) {
+    if (filename) {
       await axios({
         method: 'put',
-        url: `https://${domain}/${pdfid}/_meta`,
-        data: { filename: pdf_filename },
+        url: `${domain}/${pdfid}/_meta`,
+        data: { filename },
         headers: { 'content-type': 'application/json', authorization: 'Bearer '+token },
       }).catch(e => { throw oerror.tag(e, `ERROR: failed to put PDF filename into ${pdfid}/_meta`); });
     }
@@ -158,8 +157,8 @@ function pullData(masked, doctype) {
     title: 'Unknown Document Type', 
     rows: [ { key: 'Unknown', value: 'Unrecognized Document' } ] 
   };
-  if (doctype === 'fsqa-audit') data = pullAuditData(masked);
-  if (doctype === 'coi')   data = pullCoIData(masked);
+  if (doctype === 'fsqa-audits') data = pullAuditData(masked);
+  if (doctype === 'cois')   data = pullCoIData(masked);
   return data;
 }
 
@@ -168,6 +167,7 @@ function capitalizeFirstLetter(string) {
 }
 
 function pullAuditData(audit) {
+  trace('pdf: pulling audit data from audit: ', audit);
   let validity = null;
   if (audit.certificate_validity_period && audit.certificate_validity_period.start && audit.certificate_validity_period.end) {
     validity = {
@@ -207,6 +207,7 @@ function pullAuditData(audit) {
     );
     ret.rows.push({ key: label, mask });
   });
+  trace('Pulled ',ret.rows.length,' rows of data from audit, they are: ', ret);
   return ret;
 }
 

@@ -60,6 +60,7 @@ const service = new Service('trellis-shares', domain, token, 1, {
 service.on('share-user-link', config.get('timeout'), newJob)
 
 async function newJob (job, { jobId, log, oada }) {
+  trace('Received job ',jobId,', it is: ', job);
   // until oada-jobs adds cross-linking, make sure we are linked under pdf's jobs
   trace('Linking job under src/_meta until oada-jobs can do that natively')
   await oada.put({
@@ -92,8 +93,8 @@ async function newJob (job, { jobId, log, oada }) {
   let src = _.cloneDeep(orig); // default is we're linking to original resource
 
   // Now, replace original and sourcelink if we are supposed to make a copy instead of just linking:
+  let newid = false;
   if (job.config.copy) {
-    let newid = false;
 
     // Make a copy, keeping all the common keys between job.copy.original and job.copy.meta
     let meta = await oada
@@ -122,12 +123,14 @@ async function newJob (job, { jobId, log, oada }) {
 
 
     // If masking is requested by the job, the mask library will make the new copy resource (still need to handle meta):
+    let newid = false;
     if (job.config.copy.mask) {
       // This masked copy cannot link to an original unmasked pdf, so we need to remove it from meta,
       // but we should get it's original filename to re-use on the mask:
       let pdf_filename = false;
       if (meta.vdoc && meta.vdoc.pdf) {
-        pdf_filename = await oada.get({ path: `/${meta.vdoc.pdf._id}/_meta/filename` }).then(r=>r.data).then(f => 'MASKED-'+f)
+	// Hack: getting _meta/filename doesn't work, have to get entire _meta, then get filename from that
+        pdf_filename = await oada.get({ path: `/${meta.vdoc.pdf._id}/_meta` }).then(r=>r.data.filename).then(f => 'MASKED-'+f)
         .catch(e => { warn(`WARNING: failed to get PDF filename from original at /${meta.vdoc.pdf._id}/_meta/filename`); return false; })
         // Delete the PDF link in the new copy's meta
         delete meta.vdoc.pdf;
@@ -136,29 +139,37 @@ async function newJob (job, { jobId, log, oada }) {
       // Note that maskAndSignRemoteResourceAsNewResource will create a new resource and put new stuff in its meta, but
       // we don't need to load it into our copy of meta because our eventual PUT to meta will just be merged with that.
       trace('masked copy requested: awaiting maskAndSignRemoteResourceAsNewResource...');
-      const newid = await ml.maskAndSignRemoteResourceAsNewResource({
+      newid = await ml.maskAndSignRemoteResourceAsNewResource({
         url: `https://${domain}/${orig._id}`,
         privateJWK, 
         signer,
         token: token,
         paths: findPathsToMask(orig, job.config.copy.mask.keys_to_mask),
       });
+      // Refresh src with newly masked JSON as the new resource:
+      trace(`Refreshing src object with masked copy data`);
+      src = await oada.get({ path: `/${newid}` }).then(r=>r.data)
+        .catch(e => { warn(`ERROR: could not get newly masked resource at /${newid}.  Error was: `, e); });
+
       // Store a reference in the masked copy back to the original:
       meta.copy = { src: { _ref: newid }, masked: true };
 
       // Generate and link a PDF if necessary:
       if (job.config.copy.mask.generate_pdf) {
-        pdfkey = await makeAndPostMaskedPdf({
+	trace('PDF copy of masked document requested');
+        const pdfid = await makeAndPostMaskedPdf({
           masked: src,
           _id: newid,
           doctype: job.config.doctype,
           filename: pdf_filename,
           domain, token,
         });
-        trace(`Created new PDF, linking under the masked copy's meta.vdoc.pdf to resources/${pdfkey}`);
+        trace(`Created new PDF, linking under the masked copy's meta.vdoc.pdf to ${pdfid}`);
         if (!meta.vdoc) meta.vdoc = {};
-        meta.vdoc.pdf = { _id: `resources/${pdfkey}` };
+        meta.vdoc.pdf = { _id: pdfid };
         // The _meta will be put later, same for mask as for copy
+      } else {
+        trace(`Masked copy requested, but no PDF version asked to be generated.  job.config.copy.mask = `, job.config.copy.mask);
       }
 
 
@@ -192,14 +203,15 @@ async function newJob (job, { jobId, log, oada }) {
     meta.copy = { src: { _ref: orig._id } },
 
     trace('Created copy resource, new id = ', newid)
-  }
-  // Put the copy's meta:
-  await oada.put({ path: `/${newid}/_meta`, data: meta })
+    // Put the new meta:
+    trace(`Putting meta to /${newid}/_meta for masked = ${job.config.copy.mask}, data for meta is `, meta);
+    await oada.put({ path: `/${newid}/_meta`, data: meta })
 
-  // Reset the srclink to point to the copy now
-  srclink._id = newid;
-  // Save the new id back to the job config so it can get returned with the result
-  job.config.newid = newid;
+    // Reset the srclink to point to the copy now
+    srclink._id = newid;
+    // Save the new id back to the job config so it can get returned with the result
+    job.config.newid = newid;
+  }
 
   // If we want a versioned link to the resource, set _rev on the link we're about to put:
   if (job.config.versioned) srclink._rev = 0
@@ -220,8 +232,8 @@ async function newJob (job, { jobId, log, oada }) {
 
   trace('Incrementing share count under src/_meta')
   let shareCount = await oada.get({
-    path: `${job.config.src}/_meta/services/trellis-shares/share-count`
-  }).then(r => r.data)
+    path: `${job.config.src}/_meta`
+  }).then(r => r.data).then(r => (r && r.services && r.services['trellis-shares'] && r.services['trellis-shares']['share-count'] ? r.services['trellis-shares']['share-count'] : 0))
   .catch(e => {
     if (!e || e.status !== 404) throw oerror.tag(e, 'Failed to fetch share count, non-404 error status returned');
     return 0; // no share-count there, so it's just initialized to 0
@@ -428,17 +440,18 @@ service.start().catch(e => console.error('Service threw uncaught error: ', e))
 
 //----------------------------------------------------------------------------------------
 // Recursive function that returns a flat list of json-pointer paths to any matching keys
-function findPathsToMask(obj,previouspath) {
+function findPathsToMask(obj, keys_to_mask, previouspath) {
+  if (!previouspath) previouspath = '';
   const jp = jsonpointer.parse(previouspath);
   return _.reduce(_.keys(obj), (acc,k) => {
     const curpath = jsonpointer.compile([...jp, k]);
-    if (_.includes(KEYS_TO_MASK, k)) {
+    if (_.includes(keys_to_mask, k)) {
       acc.push(curpath);
       return acc;
     }
     if (typeof obj[k] === 'object') {
       // recursively keep looking for paths
-      return acc.concat(findPathsToMask(obj[k], curpath));
+      return acc.concat(findPathsToMask(obj[k], keys_to_mask, curpath));
     }
     return acc;
   }, []);
