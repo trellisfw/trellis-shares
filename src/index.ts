@@ -16,7 +16,7 @@ import type Link from '@oada/types/oada/link/v1';
 import { Service, Job } from '@oada/jobs';
 
 // @ts-ignore
-import template from './email_templates/index';
+import template from '../email_templates/index';
 import makeAndPostMaskedPdf from './pdfgen';
 import config from './config';
 import tree from './tree';
@@ -81,7 +81,7 @@ service.on(
     ) {
       throw new Error('Job has no config');
     }
-    const { config } = job as unknown as {
+    const { config } = (job as unknown) as {
       config: {
         versioned?: boolean;
         dest: string;
@@ -120,9 +120,9 @@ service.on(
     // Now, replace original and sourcelink if we are supposed to make a copy instead of just linking:
     if (config.copy) {
       // Make a copy, keeping all the common keys between job.copy.original and job.copy.meta
-      let { data: meta }: { data: any } = await oada.get({
+      let { data: meta } = (await oada.get({
         path: `${job.config.src}/_meta`,
-      });
+      })) as { data: any };
       // flatten() returns a flat object with path:value pairs like:
       // {
       //   "a.b.c": <value>
@@ -420,7 +420,7 @@ async function putLinkAndEnsureParent({
 }
 
 async function createEmailJobs({ oada, job }: { oada: OADAClient; job: Job }) {
-  const { config } = job as unknown as {
+  const { config } = (job as unknown) as {
     config: { doctype: string; chroot?: string; user: { id: string } };
   };
   // We just linked a doctype into a user, lookup the trading partner id for
@@ -498,9 +498,9 @@ async function createEmailJobs({ oada, job }: { oada: OADAClient; job: Job }) {
         type: 'email',
         config: {
           multiple: false,
-          to: (
-            addrs.parseAddressList(emails) as ParsedMailbox[]
-          ).map<ParsedMailbox>(({ name, address }) => ({
+          to: (addrs.parseAddressList(
+            emails
+          ) as ParsedMailbox[]).map<ParsedMailbox>(({ name, address }) => ({
             // @ts-ignore
             name: name || undefined,
             email: address,

@@ -1,5 +1,5 @@
-import fs from 'fs';
-import { join } from 'path';
+const fs = require('fs');
+const { join } = require('path');
 
 const images = fs.readdirSync('./email_templates/images');
 
@@ -22,7 +22,7 @@ for (const image of images) {
   });
 }
 
-export default {
+module.exports = {
   html,
   attachments,
 };

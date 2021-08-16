@@ -36,8 +36,8 @@ const config = convict({
     },
     token: {
       doc: 'OADA API token',
-      format: Array,
-      default: ['god'],
+      format: String,
+      default: 'god',
       env: 'TOKEN',
       arg: 'token',
     },
@@ -54,7 +54,7 @@ const config = convict({
   timeout: {
     format: 'duration',
     // The types for duration suck
-    default: (5 * 60 * 1000) as unknown as number,
+    default: ((5 * 60 * 1000) as unknown) as number,
   },
   email: {
     skin: {
