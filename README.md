@@ -55,6 +55,7 @@ for the `z_tokens` docker-compose file will work:
 ## Masking and PDF Generation
 
 Plan is for this to work as follows:
+
 - This only works for copying, it does not work for re-linking an existing document
 - job config includes mask and pdf creation instructions (i.e. whether to mask, and which keys to mask)
 - when the copy is created, the copy will ref back to the original in its meta/vdoc/unmasked

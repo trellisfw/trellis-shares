@@ -1,1 +1,26 @@
 node_modules
+package.lock
+
+*.log
+.DS_Store
+
+# TypeScript
+dist
+*.tsbuildinfo
+
+# Docker overrides
+docker-compose.override.yml
+.env
+
+# Ignore act stuff?
+.actrc
+act/
+
+# yarn 2 stuff
+.yarn/*
+!.yarn/releases
+!.yarn/plugins
+!.yarn/versions
+.pnp.*
+# ignore sdk stuff
+.vim

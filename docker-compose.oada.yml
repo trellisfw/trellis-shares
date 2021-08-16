@@ -1,0 +1,6 @@
+# Thing for oadadeploy nonsense?
+services:
+  trellis-shares:
+    extends:
+      file: ./services/trellis/shares/docker-compose.yml
+      service: trellis-shares

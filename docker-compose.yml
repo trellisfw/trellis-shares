@@ -1,38 +1,15 @@
-version: '3'
-
 services:
-  ##########################################
-  # Overrides for oada-core services:
-  ##########################################
-
-  # Add ourselves to yarn to do yarn install
-  yarn:
-    volumes:
-      - ./services-available/trellis-shares:/code/trellis-shares
-
-  # Add ourselves to admin container:
-  admin:
-    volumes:
-      - ./services-available/trellis-shares:/code/trellis-shares
-
-  ###############################################
-  # This service's definition:
-  ###############################################
   trellis-shares:
     build:
-      context: ./services-available/trellis-shares
-    container_name: trellis-shares
-    restart: always
-    networks:
-      - http_net
-      - startup_net
-    volumes:
-      - ./services-available/trellis-shares:/code/trellis-shares
-      - ./oada-core/libs:/code/libs
-      - ./oada-srvc-docker-config.js:/oada-srvc-docker-config.js
+      context: .
+    image: Qlever-LLC/oada-service-template
+    restart: unless-stopped
     environment:
       - NODE_TLS_REJECT_UNAUTHORIZED
       - NODE_ENV=${NODE_ENV:-development}
-      - DEBUG=${DEBUG:-"trellis-shares:info,*warn*,*error*"}
-      - domain
-      - token
+      - DEBUG=${DEBUG-*:error,*:warn,*:info}
+      # Connect to host if DOMAIN not set.
+      # You should really not rely on this though. Set DOMAIN.
+      - DOMAIN=${DOMAIN:-host.docker.internal}
+      # TODO: Nicer way to deal with tokens?
+      - TOKEN=${TOKEN:-god}

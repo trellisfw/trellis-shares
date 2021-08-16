@@ -1,0 +1,280 @@
+name: Build and push docker image
+
+on:
+  push:
+  pull_request:
+
+env:
+  # Set to true to push images to DockerHub
+  # NB: images are public unless you configure DockerHub repo properly
+  DOCKERHUB_PUSH: true
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+
+    outputs:
+      version: ${{ steps.ref.outputs.version }}
+      release: ${{ steps.ref.outputs.release }}
+      major: ${{ steps.semver.outputs.major }}
+      minor: ${{ steps.semver.outputs.minor }}
+      patch: ${{ steps.semver.outputs.patch }}
+      prerelease: ${{ steps.semver.outputs.prerelease }}
+      build: ${{ steps.semver.outputs.build }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2.3.4
+
+      - name: Parse Ref
+        id: ref
+        run: |
+          echo 'Processing git ref:' $GITHUB_REF
+
+          # Release version is just the release number
+          if [[ $GITHUB_REF == refs/heads/release/* ]]; then
+            VERSION=${GITHUB_REF#refs/heads/release/}
+            #RELEASE=true
+
+          elif [[ $GITHUB_REF == refs/tags/* ]]; then
+            if [[ $GITHUB_REF == refs/tags/v* ]]; then
+              VERSION=${GITHUB_REF#refs/tags/v}
+              RELEASE=true
+            else
+              VERSION=tag-${GITHUB_REF#refs/tags/}
+            fi
+
+          # Branch version is branch name (with '/' -> '-')
+          elif [[ $GITHUB_REF == refs/heads/* ]]; then
+            VERSION=$(echo ${GITHUB_REF#refs/heads/} | sed -r 's#/+#-#g')
+
+            # Expect for the default_branch, which gets version "edge"
+            if [ "$VERSION" == "${{ github.event.repository.default_branch }}" ]; then
+              VERSION=edge
+            fi
+
+          # PR versions are pr-<github pr number>
+          elif [[ $GITHUB_REF == refs/pull/* ]]; then
+            VERSION=pr-${{ github.event.number }}
+
+          else
+            echo ::error ::Can not determine version of service -- unexpected job trigger? Stopping.
+            exit 1
+          fi
+
+          echo ::set-output name=version::${VERSION}
+          echo ::set-output name=release::${RELEASE}
+
+      - name: Parse Semver
+        id: semver
+        if: ${{ steps.ref.outputs.release }}
+        uses: booxmedialtd/ws-action-parse-semver@v1.4.0
+        with:
+          input_string: ${{ steps.ref.outputs.version }}
+          #version_extractor_regex: '\/v(.*)$'
+
+  build-and-push:
+    name: Build and push docker Image
+    needs:
+      - setup
+
+    strategy:
+      matrix:
+        service:
+          # Assume repo slug is the service slug?
+          - ${{ github.repository }}
+        context:
+          - '.'
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2.3.4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1.2.0
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v1.5.1
+        with:
+          version: latest
+
+      - name: Builder instance name
+        run: echo ${{ steps.buildx.outputs.name }}
+
+      - name: Available platforms
+        run: echo ${{ steps.buildx.outputs.platforms }}
+
+      - name: Cache docker layers
+        if: ${{ !env.ACT }} # Awaiting ACT version after 0.2.17 for this feature
+        uses: actions/cache@v2.1.6
+        id: cache
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ matrix.service }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-${{ matrix.service }}-
+            ${{ runner.os }}-buildx-
+
+      - name: Prepare Images
+        id: images
+        run: |
+          # Name on DockerHub (Doesn't like upper case)
+          DOCKER_IMAGE=$(echo ${{ matrix.service }} | tr '[:upper:]' '[:lower:]')
+          # Name on GHCR
+          GHCR_IMAGE=ghcr.io/${DOCKER_IMAGE}
+          # Allow overriding DockerHub repo if different from slug?
+          if [[ "${{ secrets.DOCKER_REPO }}" ]]; then
+            DOCKER_IMAGE=$(echo ${{ matrix.service }} | sed 's/${{ github.repository_owner }}/${{ secrets.DOCKER_REPO }}/g')
+          fi
+
+          echo ::set-output name=dockerhub::${DOCKER_IMAGE}
+          echo ::set-output name=ghcr::${GHCR_IMAGE}
+
+      - name: Login to DockerHub
+        #if: ${{ env.DOCKERHUB_PUSH && github.event_name != 'pull_request' }}
+        uses: docker/login-action@v1.10.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to GitHub Container Registry
+        #if: github.event_name != 'pull_request'
+        uses: docker/login-action@v1.10.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: |
+            ${{ steps.images.outputs.dockerhub }}
+            ${{ steps.images.outputs.ghcr}}
+          # Don't update latest on prereleases?
+          flavor: latest=${{ !!(needs.setup.outputs.release && !needs.setup.outputs.prerelease) }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=schedule,pattern=nightly
+            type=edge
+            type=ref,event=pr
+            type=sha
+
+      - name: Build and push images
+        uses: docker/build-push-action@v2.6.1
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.context }}/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            GIT_REF=${{ github.sha }}
+            SERVICE=${{ matrix.service }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new
+
+      - # Temp fix
+        # https://github.com/docker/build-push-action/issues/252
+        # https://github.com/moby/buildkit/issues/1896
+        name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+  # Use Snyk to check docker image
+  snyk-image:
+    name: Snyk Checks
+
+    needs:
+      - setup
+      - build-and-push
+
+    strategy:
+      matrix:
+        service:
+          # Assume repo slug is the service slug?
+          - ${{ github.repository }}
+        context:
+          - '.'
+
+    runs-on: ubuntu-latest
+
+    env:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+    # Only run if we have a Snyk token?
+    #if: ${{ env.SNYK_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2.3.4
+
+      - name: Find Docker tag for Snyk
+        id: tag
+        run: |
+          # Doesn't like upper case
+          OWNER=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')
+          # Nameo on DockerHub (Doesn't like upper case)
+          DOCKER_IMAGE=$(echo ${{ matrix.service }} | tr '[:upper:]' '[:lower:]')
+          # Name on GHCR
+          GHCR_IMAGE=ghcr.io/${DOCKER_IMAGE}
+          # Allow overriding DockerHub repo if different from slug?
+          if [[ "${{ secrets.DOCKER_REPO }}" ]]; then
+            DOCKER_IMAGE=$(echo ${{ matrix.service }} | sed 's/${{ github.repository_owner }}/${{ secrets.DOCKER_REPO }}/g')
+          fi
+
+          TAG="${GHCR_IMAGE}:edge"
+          if [[ "${{ needs.setup.outputs.release }}" ]]; then
+            if [[ "${{ needs.setup.outputs.prerelease }}" ]]; then
+              TAG="${GHCR_IMAGE}:edge"
+            else
+              TAG="${GHCR_IMAGE}:latest"
+            fi
+          fi
+
+          echo ::set-output name=tag::${TAG}
+          # Allow overriding Snyk org if different from GitHub?
+          if [[ "${{ secrets.SNYK_ORG }}" ]]; then
+            echo ::set-output name=org::${{ secrets.SNYK_ORG }}
+          else
+            echo ::set-output name=org::${OWNER}
+          fi
+          echo ::set-output name=cur::${GHCR_IMAGE}:sha-${GITHUB_SHA::8}
+
+      - name: Monitor Service image with Snyk
+        uses: snyk/actions/docker@master
+        # Don't break workflow on errros?
+        continue-on-error: true
+        with:
+          command: container monitor
+          image: ${{ steps.tag.outputs.tag }}
+          args: --org=${{ steps.tag.outputs.org }} --file=${{ matrix.context }}/Dockerfile
+
+      - name: Test current Service image with Snyk
+        uses: snyk/actions/docker@master
+        # Don't break workflow on errros?
+        continue-on-error: true
+        with:
+          image: ${{ steps.tag.outputs.tag }}
+          args: --org=${{ steps.tag.outputs.org }} --file=${{ matrix.context }}/Dockerfile
+
+      - name: Secure Code Warrior
+        uses: SecureCodeWarrior/github-action-add-sarif-contextual-training@v1
+        with:
+          inputSarifFile: ./snyk.sarif
+          outputSarifFile: ./securecodewarrior.sarif
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload SARIF file to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v1
+        with:
+          sarif_file: ./securecodewarrior.sarif
+          #sarif_file: ./snyk.sarif
