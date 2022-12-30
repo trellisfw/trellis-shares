@@ -4155,12 +4155,21 @@ fsevents@~2.3.2:
   languageName: node
   linkType: hard
 
-"json-pointer@npm:^0.6.0, json-pointer@npm:^0.6.1":
+"json-pointer@npm:^0.6.0":
   version: 0.6.1
   resolution: "json-pointer@npm:0.6.1"
   dependencies:
     foreach: ^2.0.4
   checksum: 882b4b24b515fd866f8c228ed1381c129a40bdbfec578b73882be86a52bbcac15aaa87579c548167d4d8d9e3fc60e35aefead473df95c463553bede2b957f79c
+  languageName: node
+  linkType: hard
+
+"json-pointer@npm:^0.6.2":
+  version: 0.6.2
+  resolution: "json-pointer@npm:0.6.2"
+  dependencies:
+    foreach: ^2.0.4
+  checksum: 668143014b16d7f90e6f0e6c2d756b00b799424f58d750794a79a24cbce595855b224f7861986aaff719579558fbab81fb83c7371f5e24aded9dc33b3838de30
   languageName: node
   linkType: hard
 
@@ -6848,7 +6857,7 @@ fsevents@~2.3.2:
     eslint-plugin-sonarjs: ^0.11.0
     eslint-plugin-unicorn: ^39.0.0
     flat: ^5.0.2
-    json-pointer: ^0.6.1
+    json-pointer: ^0.6.2
     ksuid: ^2.0.0
     lodash: ^4.17.21
     mocha: ^9.1.3
