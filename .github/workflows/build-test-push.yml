@@ -1,4 +1,4 @@
-# Copyright 2021 Qlever LLC
+# Copyright 2022 Qlever LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,20 +12,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Build and push docker image
+name: Build, test, and push service images
 
 on:
   push:
   pull_request:
 
 jobs:
-  call-build-and-push-service:
+  yarn:
+    name: yarn CI
+    uses: qlever-llc/workflows/.github/workflows/build-and-publish-package.yml@master
+    secrets:
+      npm_token: ${{ secrets.NPM_AUTH_TOKEN }}
+    with:
+      # Remove this line if your tests don't need an OADA instance
+      oada: true
+      publish: false
+  docker:
+    name: Docker CI
+    # Wait for yarn tests to pass?
+    needs:
+      - yarn
     uses: qlever-llc/workflows/.github/workflows/build-and-push-service.yml@master
     secrets:
       dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
       dockerhub_repo: ${{ secrets.DOCKER_REPO }}
       snyk_org: ${{ secrets.SNYK_ORG }}
       # Actual secrets
-      github_token: ${{ secrets.GITHUB_TOKEN }}
       dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
       snyk_token: ${{ secrets.SNYK_TOKEN }}
+      cosign_key: ${{ secrets.COSIGN_KEY }}
+      cosign_password: ${{ secrets.COSIGN_PASSWORD }}
