@@ -1,28 +1,43 @@
-const fs = require('fs');
-const { join } = require('path');
+/**
+ * @license
+ * Copyright 2023 Qlever LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-const images = fs.readdirSync('./email_templates/images');
+import { readFile, readdir } from 'node:fs/promises';
+import { join } from 'node:path';
 
-let html = fs.readFileSync('./email_templates/index.html').toString();
+const images = await readdir('./email_templates/images');
 
-const attachments = [];
-for (const image of images) {
+let index = await readFile('./email_templates/index.html').toString();
+
+export const attachments = [];
+for await (const image of images) {
   const content = Buffer.from(
-    fs.readFileSync(join('email_templates', 'images', image))
+    await readFile(join('email_templates', 'images', image))
   ).toString('base64');
   const contentId = image;
 
-  html = html.replace(`images/${image}`, `cid:${image}`);
+  index = index.replace(`images/${image}`, `cid:${image}`);
 
   attachments.push({
     content,
+    // eslint-disable-next-line camelcase
     content_id: contentId,
     filename: image,
     disposition: 'inline',
   });
 }
 
-module.exports = {
-  html,
-  attachments,
-};
+export const html = index;

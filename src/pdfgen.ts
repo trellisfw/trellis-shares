@@ -1,28 +1,47 @@
-import fs from 'fs';
-import querystring from 'querystring'; // this is built-in to node
+/**
+ * @license
+ * Copyright 2023 Qlever LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import querystring from 'node:querystring'; // This is built-in to node
+import { readFile } from 'node:fs/promises';
+
+import moment, { type Moment } from 'moment';
+import KSUID from 'ksuid';
+// FIXME: Don't use lodash
 import _ from 'lodash';
-import pdfjs from 'pdfjs';
-import helvetica from 'pdfjs/font/Helvetica';
-import helvetica_bold from 'pdfjs/font/Helvetica-Bold';
+import axios from 'axios';
 import courier from 'pdfjs/font/Courier';
 import debug from 'debug';
+import helvetica from 'pdfjs/font/Helvetica';
+import helvetica_bold from 'pdfjs/font/Helvetica-Bold';
 import jsonpointer from 'json-pointer';
-import moment, { Moment } from 'moment';
+import oError from '@overleaf/o-error';
+import pdfjs from 'pdfjs';
 import wrap from 'wrap-ansi';
-import axios from 'axios';
-import oerror from '@overleaf/o-error';
-import ksuid from 'ksuid';
 
 import ml from '@trellisfw/masklink';
 
 const error = debug('trellis-shares#pdfgen:error');
-//const warn = debug('trellis-shares#pdfgen:warn');
+// Const warn = debug('trellis-shares#pdfgen:warn');
 const info = debug('trellis-shares#pdfgen:info');
 const trace = debug('trellis-shares#pdfgen:trace');
 
 // Read in any images or other files for the PDF
 const logo = new pdfjs.Image(
-  fs.readFileSync('./pdf-assets/logo-masklink-green.jpg')
+  await readFile('./pdf-assets/logo-masklink-green.jpg')
 );
 
 interface Row {
@@ -54,12 +73,11 @@ async function makeAndPostMaskedPdf({
 }) {
   try {
     trace('makeAndPostMaskedPdf: creating pdf for doctype %s', doctype);
-    if (!domain.match(/^http/)) {
-      domain = 'https://' + domain;
+    if (!domain.startsWith('http')) {
+      domain = `https://${domain}`;
     }
 
-    if (!filename)
-      filename = 'TrellisMaskAndLink-' + (await ksuid.random()) + '.pdf';
+    if (!filename) filename = `TrellisMaskAndLink-${await KSUID.random()}.pdf`;
 
     const doc = new pdfjs.Document({
       font: helvetica,
@@ -73,18 +91,18 @@ async function makeAndPostMaskedPdf({
 
     // From: http://pdfjs.rkusa.st/
 
-    //-------------------
+    // -------------------
     // The header:
     const header = doc
       .header()
-      .table({ widths: [null, null], paddingBottom: 1.0 * pdfjs.cm })
+      .table({ widths: [null, null], paddingBottom: Number(pdfjs.cm) })
       .row();
     header.cell().image(logo, { height: 2 * pdfjs.cm });
     header
       .cell()
       .text({ textAlign: 'right' })
       .add('Trellis - Mask & Link\n', { fontSize: 14, font: helvetica_bold })
-      // @ts-ignore
+      // @ts-expect-error
       .text({ textAlign: 'right' })
       .add('A masked document shielding confidential information\n')
       .add('https://github.com/trellisfw/trellisfw-masklink', {
@@ -96,15 +114,15 @@ async function makeAndPostMaskedPdf({
 
     trace('Extracting data for %s', doctype);
     const data = pullData(masked, doctype);
-    trace(data, 'Got this data for masked resource');
+    trace({ data }, 'Got this data for masked resource');
 
     doc
       .cell({ paddingBottom: 0.5 * pdfjs.cm })
       .text(data.title, { fontSize: 16, font: helvetica_bold });
 
     const resTable = doc.table({
-      widths: [4.0 * pdfjs.cm, null],
-      borderHorizontalWidths: function () {
+      widths: [4 * pdfjs.cm, null],
+      borderHorizontalWidths() {
         return 1;
       },
       padding: 5,
@@ -115,14 +133,14 @@ async function makeAndPostMaskedPdf({
       const tr = resTable.row();
       tr.cell().text(key);
       if (mask) {
-        trace(mask, 'Adding mask row for key ' + key);
+        trace(mask, `Adding mask row for key ${key}`);
         tr.cell()
           .text('< MASKED >')
-          // @ts-ignore
+          // @ts-expect-error ????
           .text('If you have permission, click here to verify', {
-            link:
-              'https://trellisfw.github.io/reagan?trellis-mask=' +
-              querystring.escape(JSON.stringify(mask['trellis-mask'])),
+            link: `https://trellisfw.github.io/reagan?trellis-mask=${querystring.escape(
+              JSON.stringify(mask['trellis-mask'])
+            )}`,
             underline: true,
             color: '0x569cd6',
           });
@@ -131,22 +149,25 @@ async function makeAndPostMaskedPdf({
         tr.cell(value);
       }
     }
-    _.each(data.rows, addRow);
+
+    for (const row of data.rows) {
+      addRow(row);
+    }
 
     trace('Finished adding tables, now adding json');
     // And, in the final pages, add the actual JSON with the signatures
     doc.cell().pageBreak();
     // Make a copy that doesn't have the _ oada keys like _id, _rev, etc.
-    const clean = _.omitBy(_.cloneDeep(masked), (_v, k) => k.match(/^_/));
+    const clean = _.omitBy(_.cloneDeep(masked), (_v, k) => /^_/.exec(k));
 
     doc
       .cell({ paddingBottom: 0.5 * pdfjs.cm })
-      .text(data.title + ' - Full Signature and Data')
-      // @ts-ignore
+      .text(`${data.title} - Full Signature and Data`)
+      // @ts-expect-error
       .text('Click here to verify full resource if you have permission to it', {
-        link:
-          'https://trellisfw.github.io/reagan?masked-resource-url=' +
-          querystring.escape(`${domain}/${_id}`),
+        link: `https://trellisfw.github.io/reagan?masked-resource-url=${querystring.escape(
+          `${domain}/${_id}`
+        )}`,
         underline: true,
         color: '0x569cd6',
       });
@@ -165,56 +186,57 @@ async function makeAndPostMaskedPdf({
 
     // POST to /resources
     // content-type: application/pdf
-    const pdfid = await axios({
+    const pdfId = await axios({
       method: 'post',
       url: `${domain}/resources`,
       data: docbuf,
       headers: {
         'content-type': 'application/pdf',
-        'authorization': 'Bearer ' + token,
+        'authorization': `Bearer ${token}`,
       },
     })
       .then((r) => r.headers['content-location'].slice(1))
-      .catch((e) => {
-        throw oerror.tag(
-          e,
+      .catch((error_) => {
+        throw oError.tag(
+          error_,
           'ERROR: failed to POST new PDF of masked document to /resources.'
         );
       });
-    info('Successfully posted new PDF to ' + pdfid);
+    info(`Successfully posted new PDF to ${pdfId}`);
 
     // Put the filename in the pdf's meta
     if (filename) {
       await axios({
         method: 'put',
-        url: `${domain}/${pdfid}/_meta`,
+        url: `${domain}/${pdfId}/_meta`,
         data: { filename },
         headers: {
           'content-type': 'application/json',
-          'authorization': 'Bearer ' + token,
+          'authorization': `Bearer ${token}`,
         },
-      }).catch((e) => {
-        throw oerror.tag(
-          e,
-          `ERROR: failed to put PDF filename into ${pdfid}/_meta`
+      }).catch((error_) => {
+        throw oError.tag(
+          error_,
+          `ERROR: failed to put PDF filename into ${pdfId}/_meta`
         );
       });
     }
 
-    return pdfid;
-  } catch (e) {
-    error(e, 'FAILED to create pdf');
+    return pdfId;
+  } catch (error_) {
+    error(error_, 'FAILED to create pdf');
   }
 }
 
 function pullData(masked: any, doctype: 'fsqa-audits' | 'cois') {
-  let data = {
-    title: 'Unknown Document Type',
-    rows: [{ key: 'Unknown', value: 'Unrecognized Document' }] as Row[],
-  };
-  if (doctype === 'fsqa-audits') data = pullAuditData(masked);
-  if (doctype === 'cois') data = pullCoIData(masked);
-  return data;
+  return doctype === 'cois'
+    ? pullCoIData(masked)
+    : doctype === 'fsqa-audits'
+    ? pullAuditData(masked)
+    : {
+        title: 'Unknown Document Type',
+        rows: [{ key: 'Unknown', value: 'Unrecognized Document' }] as Row[],
+      };
 }
 
 function capitalizeFirstLetter(string: string) {
@@ -225,55 +247,52 @@ function pullAuditData(audit: {
   certificate_validity_period?: { start?: string; end?: string };
   organization?: { name?: string };
   score?: { final?: { value?: string } };
-  scope?: { products_observed?: { name: string }[] };
+  scope?: { products_observed?: Array<{ name: string }> };
 }) {
   trace(audit, 'pdf: pulling audit data from audit');
-  let validity: { start: Moment; end: Moment; expired?: boolean } | null = null;
+  let validity: { start: Moment; end: Moment; expired?: boolean } | undefined;
   if (
-    audit.certificate_validity_period &&
-    audit.certificate_validity_period.start &&
+    audit.certificate_validity_period?.start &&
     audit.certificate_validity_period.end
   ) {
     validity = {
       start: moment(audit.certificate_validity_period.start, 'M/D/YYYY'),
       end: moment(audit.certificate_validity_period.end, 'M/D/YYYY'),
     };
-    if (!validity.start || !validity.start.isValid()) {
-      validity = null;
-    } else if (!validity.end || !validity.end.isValid()) {
-      validity = null;
-    } else {
+    if (!validity.start?.isValid()) {
+      validity = undefined;
+    } else if (validity.end?.isValid()) {
       const now = moment();
       // If it starts after today, or ended before today, it's expired
       validity.expired =
         validity.start.isAfter(now) || validity.end.isBefore(now);
+    } else {
+      validity = undefined;
     }
   }
-  const org = (audit.organization && audit.organization.name) || null;
-  const score =
-    audit.score && audit.score.final ? audit.score.final.value : false;
-  const scope =
-    audit.scope && audit.scope.products_observed
-      ? _.join(
-          _.map(audit.scope.products_observed, (p) => p.name),
-          ', '
-        )
-      : false;
 
-  const ret = {
-    title: 'FSQA Audit: ' + (org ? org : ''),
+  const org = audit.organization?.name ?? null;
+  const score = audit.score?.final?.value ?? false;
+  const scope = audit.scope?.products_observed
+    ? _.join(
+        _.map(audit.scope.products_observed, (p) => p.name),
+        ', '
+      )
+    : false;
+
+  const returnValue = {
+    title: `FSQA Audit: ${org ?? ''}`,
     rows: [] as Row[],
   };
-  if (org) ret.rows.push({ key: 'Organization:', value: org });
-  if (score) ret.rows.push({ key: 'Score:', value: score });
-  if (scope) ret.rows.push({ key: 'Scope:', value: scope });
+  if (org) returnValue.rows.push({ key: 'Organization:', value: org });
+  if (score) returnValue.rows.push({ key: 'Score:', value: score });
+  if (scope) returnValue.rows.push({ key: 'Scope:', value: scope });
   if (validity)
-    ret.rows.push({
+    returnValue.rows.push({
       key: 'Validity:',
-      value:
-        validity.start.format('MMM d, YYYY') +
-        ' to ' +
-        validity.end.format('MMM d, YYYY'),
+      value: `${validity.start.format('MMM d, YYYY')} to ${validity.end.format(
+        'MMM d, YYYY'
+      )}`,
     });
   // Add all masked things
   const paths = ml.findAllMaskPathsInResource(audit);
@@ -283,26 +302,30 @@ function pullAuditData(audit: {
       _.map(jsonpointer.parse(p), (word) => capitalizeFirstLetter(word)),
       ' '
     );
-    ret.rows.push({ key: label, mask });
+    returnValue.rows.push({ key: label, mask });
   });
-  trace(ret, 'Pulled rows of data from audit');
-  return ret;
+  trace(returnValue, 'Pulled rows of data from audit');
+  return returnValue;
 }
 
 function pullCoIData(coi: {
   producer?: { name?: string };
   holder?: { name?: string };
-  policies?: { number: number; effective_date: string; expire_date: string }[];
+  policies?: Array<{
+    number: number;
+    effective_date: string;
+    expire_date: string;
+  }>;
 }) {
-  const producer = (coi && coi.producer && coi.producer.name) || null;
-  const holder = (coi.holder && coi.holder.name) || null;
-  const _policies = coi.policies || null; // COI has policies
+  const producer = coi?.producer?.name ?? null;
+  const holder = coi.holder?.name ?? null;
+  const _policies = coi.policies ?? null; // COI has policies
   // Filter policies whose dates we can't parse
   const policies =
     _policies &&
     _.filter(
       _policies as typeof _policies &
-        { start: Moment; end: Moment; expired: boolean }[],
+        Array<{ start: Moment; end: Moment; expired: boolean }>,
       (p) => {
         p.start = moment(p.effective_date);
         p.end = moment(p.expire_date);
@@ -310,25 +333,28 @@ function pullCoIData(coi: {
         if (!p.end.isValid()) return false;
         const now = moment();
         p.expired = p.start.isAfter(now) || p.end.isBefore(now);
-        return true; // keep this one in the list
+        return true; // Keep this one in the list
       }
     );
 
-  const ret = {
-    title: 'Certificate of Insurance: ' + (producer ? producer : ''),
+  const returnValue = {
+    title: `Certificate of Insurance: ${producer ? producer : ''}`,
     rows: [] as Row[],
   };
   if (producer) {
-    ret.rows.push({ key: 'Producer', value: producer });
+    returnValue.rows.push({ key: 'Producer', value: producer });
   }
+
   if (holder) {
-    ret.rows.push({ key: 'Holder', value: holder });
+    returnValue.rows.push({ key: 'Holder', value: holder });
   }
+
   _.each(policies, (p) => {
-    ret.rows.push({
+    returnValue.rows.push({
       key: `Policy ${p.number}:`,
-      value:
-        p.start.format('MMM d, YYYY') + ' to ' + p.end.format('MMM d, YYYY'),
+      value: `${p.start.format('MMM d, YYYY')} to ${p.end.format(
+        'MMM d, YYYY'
+      )}`,
     });
   });
   const paths = ml.findAllMaskPathsInResource(coi);
@@ -338,9 +364,9 @@ function pullCoIData(coi: {
       _.map(jsonpointer.parse(p), (word) => capitalizeFirstLetter(word)),
       ' '
     );
-    ret.rows.push({ key: label, mask });
+    returnValue.rows.push({ key: label, mask });
   });
-  return ret;
+  return returnValue;
 }
 
 export default makeAndPostMaskedPdf;

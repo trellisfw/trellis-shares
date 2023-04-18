@@ -1,4 +1,6 @@
-/* Copyright 2020 Qlever LLC
+/**
+ * @license
+ *  Copyright 2020 Qlever LLC
  *
  * Licensed under the Apache License, Version 2.0 (the 'License');
  * you may not use this file except in compliance with the License.
@@ -13,16 +15,14 @@
  * limitations under the License.
  */
 
+import 'dotenv/config';
 import convict from 'convict';
-// @ts-ignore
+// @ts-expect-error no types
 import convictMoment from 'convict-format-with-moment';
 import convictValidator from 'convict-format-with-validator';
-import { config as load } from 'dotenv';
 
-load();
-
+// eslint-disable-next-line @typescript-eslint/no-unsafe-argument
 convict.addFormats(convictMoment);
-// @ts-ignore
 convict.addFormats(convictValidator);
 
 const config = convict({
@@ -45,7 +45,7 @@ const config = convict({
   slack: {
     posturl: {
       format: 'url',
-      // use a real slack webhook URL
+      // Use a real slack webhook URL
       default: 'https://localhost',
       env: 'SLACK_WEBHOOK',
       arg: 'slack-webhook',
@@ -54,7 +54,7 @@ const config = convict({
   timeout: {
     format: 'duration',
     // The types for duration suck
-    default: ((5 * 60 * 1000) as unknown) as number,
+    default: (5 * 60 * 1000) as unknown as number,
   },
   email: {
     skin: {
